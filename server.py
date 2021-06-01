@@ -1,3 +1,5 @@
+#!/bin/bash sudo /home/eric/Envs/my-project/bin/python "$@"
+
 """
 Name: Jasmin Maizel
 Final Project subject: Cryptography - Enigma
@@ -26,7 +28,7 @@ class Server:
         """
         server_socket = socket.socket()  # creating the server
         server_socket.bind((ip, port))
-        server_socket.listen()
+        server_socket.listen(10)
         print("server is listening on IP", ip, "PORT", port)
 
         self.rsa_instance = RSA_encryption()  # RSA object for encrypting and decrypting messages
@@ -65,7 +67,6 @@ class Server:
         # exchanging public keys
         client_soc.send(self.rsa_instance.get_public_key())
         client_key = client_soc.recv(8000)
-
         # required variables in order to know whether or not to continue running
         # the code and whether or not the client is connected and available for messages.
         finish = False
@@ -115,8 +116,10 @@ class Server:
                         raise RuntimeError("socket connection broken")
                     chunks.append(chunk)
                     bytes_recd = bytes_recd + len(chunk)
-                time = self.rsa_instance.decrypt(client_soc.recv(8000))
-                self.all_messages.append([b''.join(chunks), time, user_name])
+                approve_str = client_soc.recv(16).decode()
+                print(approve_str)
+                encryption_data = self.rsa_instance.decrypt(client_soc.recv(8000))
+                self.all_messages.append([b''.join(chunks), encryption_data, user_name])
             except ConnectionResetError:
                 # this ConnectionResetError means the client has disconnected,
                 # therefore, we will remove it from the client list and finish the process
@@ -130,9 +133,7 @@ class Server:
     def send_msg(self):
         """
         this function sends all the connected users the incoming messages
-
         the chatting logic:
-
         When sending a message, the client will encrypt his message
         with the server's public key.
         The server will decrypt it and re-encrypt it with the public key of
@@ -144,15 +145,16 @@ class Server:
                 for user_name, client_sock, client_add, public_key in self.connected_users:
                     if user_name != sender_username:
                         total_sent = 0
-                        msg_length = len(msg)
+                        new_msg = msg + (";"+sender_username).encode()
+                        msg_length = len(new_msg)
                         client_sock.send(dumps(msg_length))
                         while total_sent < msg_length:
-                            sent = client_sock.send(msg[total_sent:])
+                            sent = client_sock.send(new_msg[total_sent:])
                             if sent == 0:
                                 raise RuntimeError("socket connection broken")
                             total_sent = total_sent + sent
-                        client_sock.send(self.rsa_instance.encrypt(encryption_data, public_key))
-                        client_sock.send(dumps(sender_username))
+                        encrypted_data_key = self.rsa_instance.encrypt(encryption_data, public_key)
+                        client_sock.send(dumps(encrypted_data_key))
                 self.all_messages.remove([msg, encryption_data, sender_username])
 
 
